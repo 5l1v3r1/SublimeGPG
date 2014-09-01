@@ -85,6 +85,40 @@ class GpgCommand(sublime_plugin.TextCommand):
         if data:
             self.view.replace(edit, doc, data)
 
+def get_recipients_from_text(window):
+    view = window.active_view()
+    #doc = sublime.Region(0, view.size())
+    first_lines = sublime.Region(0, view.text_point(4, 0))
+    print(repr(first_lines))
+    text = view.substr(first_lines)
+    print(repr(text))
+    print(repr("recipients:" in text))
+
+    key = "recipients:"
+    if key in text:
+        index = text.index(key)
+        text = text[index+len(key):]
+        if "\n" in text:
+            index = text.index("\n")
+            text = text[0:index]
+        recipients = [recipient.strip() for recipient in text.split(",")]
+        return recipients
+    else:
+        return None
+
+def get_recipients(window, on_done):
+    recipients = get_recipients_from_text(window)
+    if recipients is not None:
+        on_done(recipients)
+    else:
+        window.show_input_panel('Recipient:', '', lambda recipient: on_done(recipient), None, None)
+
+def format_recipients(recipients):
+    opts = []
+    for recipient in recipients:
+        opts.append("--recipient")
+        opts.append(recipient)
+    return opts
 
 class GpgDecryptCommand(sublime_plugin.WindowCommand):
     """Decrypts an OpenPGP format message."""
@@ -98,10 +132,10 @@ class GpgEncryptCommand(sublime_plugin.WindowCommand):
     """Encrypts plaintext to an OpenPGP format message."""
 
     def run(self):
-        self.window.show_input_panel('Recipient:', '', self.on_done, None, None)
+        get_recipients(self.window, self.on_done)
 
-    def on_done(self, recipient):
-        opts = ['--encrypt', '--recipient', recipient]
+    def on_done(self, recipients):
+        opts = ['--encrypt'] + format_recipients(recipients)
         self.window.active_view().run_command('gpg', {'opts': opts})
 
 
@@ -117,12 +151,12 @@ class GpgSignAndEncryptCommand(sublime_plugin.WindowCommand):
     """Encrypts plaintext to a signed OpenPGP format message."""
 
     def run(self):
-        self.window.show_input_panel('Recipient:', '', self.on_done, None, None)
+        get_recipients(self.window, self.on_done)
 
-    def on_done(self, recipient):
+    def on_done(self, recipients):
         opts = ['--sign',
-                '--encrypt',
-                '--recipient', recipient]
+                '--encrypt'
+                ] + format_recipients(recipients)
         self.window.active_view().run_command('gpg', {'opts': opts})
 
 
