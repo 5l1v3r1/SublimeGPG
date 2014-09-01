@@ -15,15 +15,6 @@ import platform
 import shutil
 import subprocess
 
-PASSPHRASE_APPLESCRIPT = '''
-set passphrase to text returned of ¬
-    (display dialog ¬
-        "Enter your passphrase…" with title ¬
-        "SublimeGPG" with icon POSIX file ¬
-        "/Applications/Utilities/Keychain Access.app/Contents/Resources/Keychain.icns" default answer ¬
-        "" with hidden answer)
-'''
-
 PIPE = subprocess.PIPE
 
 
@@ -78,28 +69,6 @@ def panel(window, message):
     window.run_command('show_panel', {'panel': 'output.gpg_message'})
 
 
-def get_passphrase(window, callback):
-    """get_passphrase prompts the user for their passphrase."""
-
-    if platform.system() == 'Darwin':
-        dialog_process = subprocess.Popen('osascript',
-                                          stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        result, error = dialog_process.communicate(
-            input=PASSPHRASE_APPLESCRIPT.encode())
-        if error:
-            return
-        callback(result.decode().rstrip('\r\n'))
-    elif shutil.which('zenity'):
-        dialog_process = subprocess.Popen(
-            ['zenity', '--password', '--name=SublimeGPG'],
-            stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        result, error = dialog_process.communicate()
-        if not dialog_process.returncode:
-            callback(result.decode().rstrip('\r\n'))
-    else:
-        window.show_input_panel('Passphrase:', '', callback, None, None)
-
-
 class GpgMessageCommand(sublime_plugin.TextCommand):
     """A helper command for panel."""
 
@@ -121,10 +90,7 @@ class GpgDecryptCommand(sublime_plugin.WindowCommand):
     """Decrypts an OpenPGP format message."""
 
     def run(self):
-        get_passphrase(self.window, self.on_done)
-
-    def on_done(self, passphrase):
-        opts = ['--passphrase', passphrase]
+        opts = []
         self.window.active_view().run_command('gpg', {'opts': opts})
 
 
@@ -143,10 +109,7 @@ class GpgSignCommand(sublime_plugin.WindowCommand):
     """Signs the document using a clear text signature."""
 
     def run(self):
-        get_passphrase(self.window, self.on_done)
-
-    def on_done(self, passphrase):
-        opts = ['--clearsign', '--passphrase', passphrase]
+        opts = ['--clearsign']
         self.window.active_view().run_command('gpg', {'opts': opts})
 
 
@@ -157,14 +120,9 @@ class GpgSignAndEncryptCommand(sublime_plugin.WindowCommand):
         self.window.show_input_panel('Recipient:', '', self.on_done, None, None)
 
     def on_done(self, recipient):
-        self.recipient = recipient
-        get_passphrase(self.window, self.on_done2)
-
-    def on_done2(self, passphrase):
         opts = ['--sign',
                 '--encrypt',
-                '--recipient', self.recipient,
-                '--passphrase', passphrase]
+                '--recipient', recipient]
         self.window.active_view().run_command('gpg', {'opts': opts})
 
 
